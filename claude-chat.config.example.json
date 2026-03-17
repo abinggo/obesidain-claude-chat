@@ -1,0 +1,7 @@
+{
+  "apiKey": "",
+  "baseUrl": "https://your-api-host.example.com",
+  "model": "claude-opus-4-6-thinking",
+  "maxTokens": 16384,
+  "gitRemote": "origin"
+}

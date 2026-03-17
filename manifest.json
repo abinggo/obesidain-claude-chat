@@ -1,0 +1,9 @@
+{
+  "id": "claude-chat",
+  "name": "Claude Chat",
+  "version": "1.3.0",
+  "minAppVersion": "1.4.5",
+  "description": "Claude-powered Obsidian assistant with vault tools, web search, and Git integration.",
+  "author": "Custom",
+  "isDesktopOnly": true
+}
