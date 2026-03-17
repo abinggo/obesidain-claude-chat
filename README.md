@@ -2,6 +2,8 @@
 
 # Claude Chat for Obsidian
 
+Direct Anthropic-compatible Claude assistant for Obsidian with note tools, image analysis, web search, and Git workflows.
+
 Claude Chat is an Obsidian plugin that turns Claude into a practical vault assistant instead of a plain chat window.
 
 It can read, create, edit, move, and organize notes in your vault, search the web, inspect images, and optionally run Git workflows for your note repository.
@@ -18,7 +20,7 @@ This plugin takes a simpler route:
 - No local CLI subprocess acting as a fragile middle layer
 - Easy deployment with Anthropic-compatible gateways, proxies, or self-hosted endpoints
 
-If your API endpoint works with `/v1/messages`, you can point the plugin at it directly.
+If your API endpoint is compatible with Anthropic's `/v1/messages` API, you can point the plugin at it directly.
 
 ## Key Advantages
 
@@ -75,7 +77,7 @@ This makes it useful for writing, research, note cleanup, and publishing workflo
 
 ## Features
 
-- Direct Anthropic-compatible API integration
+- Direct Anthropic Messages API-compatible integration
 - Tool-use workflow for note operations
 - Obsidian-aware Markdown rendering
 - Image upload and screenshot paste support
@@ -269,7 +271,16 @@ The plugin talks directly to your configured API `baseUrl`.
 
 Yes.
 
-If the gateway is compatible with the expected `/v1/messages` behavior, you can point the plugin to it directly.
+If the gateway is compatible with Anthropic's `/v1/messages` behavior, you can point the plugin to it directly.
+
+### Does this work with any AI API?
+
+No.
+
+The plugin currently sends Anthropic-style `messages`, `tools`, and image content blocks to `/v1/messages`.
+
+That means it works with Anthropic's own API and Anthropic-compatible providers or proxies.
+It does not natively support OpenAI Chat Completions, OpenAI Responses, Gemini, Ollama, or other custom schemas unless they explicitly emulate Anthropic's Messages API.
 
 ### Does image analysis work?
 
@@ -285,4 +296,4 @@ GitHub is only needed if you want to publish the plugin source, use release asse
 
 ## License
 
-Add your preferred open-source license before publishing.
+MIT.
