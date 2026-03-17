@@ -3,7 +3,7 @@
   "name": "Claude Chat",
   "version": "1.3.0",
   "minAppVersion": "1.4.5",
-  "description": "Anthropic-compatible Claude assistant for Obsidian with vault tools, image support, web search, and Git.",
+  "description": "Anthropic-compatible Claude assistant with vault tools, image support, web search, and Git.",
   "author": "abinggo",
   "isDesktopOnly": true
 }
