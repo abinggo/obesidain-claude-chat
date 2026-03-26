@@ -1217,12 +1217,23 @@ class ClaudeChatPlugin extends obsidian.Plugin {
   }
 
   normalizeSettings(settings) {
+    const models = Array.isArray(settings.models)
+      ? settings.models.filter(
+          (m) =>
+            m &&
+            typeof m === "object" &&
+            cleanText(m.label) &&
+            cleanText(m.model) &&
+            cleanText(m.baseUrl) &&
+            cleanText(m.apiKey)
+        )
+      : [];
+
     return {
       ...DEFAULT_SETTINGS,
       ...settings,
-      apiKey: cleanText(settings.apiKey),
-      baseUrl: normalizeBaseUrl(settings.baseUrl || DEFAULT_SETTINGS.baseUrl),
-      model: cleanText(settings.model) || DEFAULT_SETTINGS.model,
+      models,
+      activeModelLabel: cleanText(settings.activeModelLabel),
       maxTokens: clampInteger(
         settings.maxTokens,
         256,
