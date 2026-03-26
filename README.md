@@ -24,17 +24,22 @@ If your API endpoint is compatible with Anthropic's `/v1/messages` API, you can 
 
 ## Key Advantages
 
-### 1. Direct `baseUrl` configuration
+### 1. Multi-model configuration with per-model credentials
 
-You can connect the plugin directly to your own API gateway or proxy by editing one config file:
+You can configure multiple models in one config file, each with its own endpoint and API key:
 
-- `apiKey`
-- `baseUrl`
-- `model`
-- `maxTokens`
-- `gitRemote`
+```json
+{
+  "models": [
+    { "label": "My Claude", "model": "claude-opus-4-6-thinking", "baseUrl": "...", "apiKey": "..." },
+    { "label": "Fast Model", "model": "claude-sonnet-4@20250514", "baseUrl": "...", "apiKey": "..." }
+  ]
+}
+```
 
-There is no requirement to install or authenticate a separate CLI.
+Switch between them using the dropdown in the chat toolbar. The selected model is remembered across sessions.
+
+Global settings (`maxTokens`, `gitRemote`) remain at the top level.
 
 ### 2. Built-in vault actions
 
@@ -78,7 +83,9 @@ This makes it useful for writing, research, note cleanup, and publishing workflo
 ## Features
 
 - Direct Anthropic Messages API-compatible integration
+- Multi-model support — configure multiple providers, switch from the toolbar dropdown
 - Tool-use workflow for note operations
+- Conversation-to-note generation with custom title and folder prompt
 - Obsidian-aware Markdown rendering
 - Image upload and screenshot paste support
 - Web search and page fetch tools
@@ -120,9 +127,20 @@ Example:
 
 ```json
 {
-  "apiKey": "your-token",
-  "baseUrl": "https://your-api-host.example.com",
-  "model": "claude-opus-4-6-thinking",
+  "models": [
+    {
+      "label": "My Primary Model",
+      "model": "claude-opus-4-6-thinking",
+      "baseUrl": "https://your-api-host.example.com",
+      "apiKey": "your-api-key"
+    },
+    {
+      "label": "Fast Model",
+      "model": "claude-sonnet-4@20250514",
+      "baseUrl": "https://another-host.example.com",
+      "apiKey": "another-api-key"
+    }
+  ],
   "maxTokens": 16384,
   "gitRemote": "origin"
 }
@@ -143,16 +161,15 @@ Local runtime files are ignored by Git:
 
 Sensitive or deployment-specific settings:
 
-- API key
-- base URL
-- model
-- token limit
-- Git remote
+- `models` array — each entry has `label`, `model`, `baseUrl`, `apiKey`
+- `maxTokens` — global token limit
+- `gitRemote` — Git remote name
 
 ### In `data.json`
 
 Local runtime preferences only:
 
+- `activeModelLabel` — the model currently selected in the toolbar
 - feature toggles
 - UI/runtime behavior flags
 
@@ -171,6 +188,7 @@ This makes the plugin easier to open-source safely.
 - "Turn this rough note into a cleaner article outline."
 - "Rewrite this meeting note into action items and decisions."
 - "Append a short summary section to the current note."
+- After a multi-turn chat, click `整理成笔记` to generate a polished Markdown note with Mermaid when useful.
 
 ### Research workflows
 
@@ -260,6 +278,19 @@ For community release, you will still want:
 - a community-plugin submission PR to the Obsidian plugin list
 
 ## FAQ
+
+### How does `整理成笔记` work?
+
+After you finish a multi-turn conversation, click the toolbar button `整理成笔记`.
+
+A dialog appears asking for a note title and destination folder. Confirm to proceed.
+
+The plugin sends the completed conversation transcript to the model in a note-writing mode, asks for a polished Obsidian Markdown note, optionally includes Mermaid diagrams when they help, saves the result to your chosen folder, and opens the new note.
+
+Related local settings:
+
+- `Generated Notes Folder` — default folder (can be overridden per-note in the dialog)
+- `Open generated note in right pane`
 
 ### Does this require Claude CLI?
 
