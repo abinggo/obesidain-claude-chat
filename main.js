@@ -1707,13 +1707,17 @@ class ClaudeChatPlugin extends obsidian.Plugin {
   }
 
   async createMessage(messages, signal, options = {}) {
-    const baseUrl = normalizeBaseUrl(this.settings.baseUrl);
+    const activeModel = this.getCurrentModel();
+    if (!activeModel) {
+      throw new Error("No models configured in claude-chat.config.json.");
+    }
+    const baseUrl = normalizeBaseUrl(activeModel.baseUrl);
     if (!baseUrl) {
-      throw new Error("Base URL is not configured.");
+      throw new Error("Base URL is not configured for the active model.");
     }
 
     const body = {
-      model: options.model || this.settings.model,
+      model: options.model || activeModel.model,
       max_tokens: clampInteger(
         options.maxTokens,
         256,
@@ -1735,7 +1739,7 @@ class ClaudeChatPlugin extends obsidian.Plugin {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": this.settings.apiKey,
+        "x-api-key": activeModel.apiKey,
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify(body),
