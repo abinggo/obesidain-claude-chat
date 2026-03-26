@@ -1,0 +1,36 @@
+{
+  "models": [
+    {
+      "label": "Tengda Opus 4.6 Thinking",
+      "model": "claude-opus-4-6-thinking",
+      "baseUrl": "https://td.geeknow.top",
+      "apiKey": "sk-bysnciSns9o9bY3yIa4YnU1cfVS8R44C2jifthaZZhHOAR8P"
+    },
+    {
+      "label": "Cloudsway Sonnet 4.6",
+      "model": "claude-sonnet-4@20250514",
+      "baseUrl": "https://genaiapi.cloudsway.net/tRPkLcCCfLOPkUoD",
+      "apiKey": "fg0qMhXAax6GFWYiBQRF"
+    },
+    {
+      "label": "Kimi K2.5 (OpenRouter)",
+      "model": "moonshotai/kimi-k2",
+      "baseUrl": "https://openrouter.ai/api",
+      "apiKey": "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"
+    },
+    {
+      "label": "MiniMax M2.5 (OpenRouter)",
+      "model": "minimax/minimax-01",
+      "baseUrl": "https://openrouter.ai/api",
+      "apiKey": "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"
+    },
+    {
+      "label": "MiniMax M2.7 (OpenRouter)",
+      "model": "minimax/minimax-m2.7",
+      "baseUrl": "https://openrouter.ai/api",
+      "apiKey": "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"
+    }
+  ],
+  "maxTokens": 16384,
+  "gitRemote": "origin"
+}
