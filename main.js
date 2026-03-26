@@ -1208,9 +1208,7 @@ class ClaudeChatPlugin extends obsidian.Plugin {
 
   getExternalConfigTemplate() {
     return {
-      apiKey: "",
-      baseUrl: DEFAULT_SETTINGS.baseUrl,
-      model: DEFAULT_SETTINGS.model,
+      models: [],
       maxTokens: DEFAULT_SETTINGS.maxTokens,
       gitRemote: DEFAULT_SETTINGS.gitRemote,
     };
