@@ -1042,47 +1042,8 @@ class ClaudeChatSettingTab extends obsidian.PluginSettingTab {
     containerEl.createEl("h2", { text: "Claude Chat Settings" });
     containerEl.createEl("p", {
       text:
-        "Connection settings are stored in claude-chat.config.json next to this plugin. Editing them here will write back to that file.",
+        "Models and credentials are configured in claude-chat.config.json next to this plugin. Switch models using the dropdown in the chat toolbar.",
     });
-
-    new obsidian.Setting(containerEl)
-      .setName("API Key")
-      .setDesc("Saved to claude-chat.config.json")
-      .addText((text) => {
-        text.setPlaceholder("sk-...");
-        text.setValue(this.plugin.settings.apiKey);
-        text.inputEl.type = "password";
-        text.onChange(async (value) => {
-          this.plugin.settings.apiKey = value.trim();
-          await this.plugin.saveSettings();
-        });
-      });
-
-    new obsidian.Setting(containerEl)
-      .setName("Base URL")
-      .setDesc("Saved to claude-chat.config.json")
-      .addText((text) =>
-        text
-          .setPlaceholder("https://td.geeknow.top")
-          .setValue(this.plugin.settings.baseUrl)
-          .onChange(async (value) => {
-            this.plugin.settings.baseUrl = normalizeBaseUrl(value);
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new obsidian.Setting(containerEl)
-      .setName("Model")
-      .setDesc("Saved to claude-chat.config.json")
-      .addText((text) =>
-        text
-          .setPlaceholder("claude-opus-4-6-thinking")
-          .setValue(this.plugin.settings.model)
-          .onChange(async (value) => {
-            this.plugin.settings.model = value.trim();
-            await this.plugin.saveSettings();
-          })
-      );
 
     new obsidian.Setting(containerEl)
       .setName("Max Tokens")
