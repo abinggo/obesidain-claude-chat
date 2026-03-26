@@ -363,7 +363,49 @@ class ClaudeChatView extends obsidian.ItemView {
 
     const toolbar = container.createDiv({ cls: "claude-chat-toolbar" });
     const toolbarMeta = toolbar.createDiv({ cls: "claude-chat-toolbar-meta" });
-    toolbarMeta.createSpan({ text: this.plugin.settings.model });
+
+    const models = this.plugin.settings.models || [];
+    const activeModel = this.plugin.getCurrentModel();
+    this.modelBtn = toolbarMeta.createEl("button", {
+      text: activeModel ? activeModel.label : "No model",
+      cls: "claude-chat-model-btn",
+    });
+
+    if (models.length > 1) {
+      let dropdown = null;
+      const closeDropdown = () => {
+        if (dropdown) {
+          dropdown.remove();
+          dropdown = null;
+        }
+      };
+      this.modelBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (dropdown) {
+          closeDropdown();
+          return;
+        }
+        dropdown = toolbarMeta.createDiv({ cls: "claude-chat-model-dropdown" });
+        models.forEach((m) => {
+          const item = dropdown.createDiv({
+            cls: "claude-chat-model-dropdown-item",
+          });
+          const isActive =
+            m.label === this.plugin.settings.activeModelLabel ||
+            (!this.plugin.settings.activeModelLabel && m === models[0]);
+          if (isActive) item.addClass("is-active");
+          item.createSpan({ text: isActive ? "✓ " + m.label : m.label });
+          item.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            await this.plugin.setActiveModel(m.label);
+            this.modelBtn.textContent = m.label;
+            closeDropdown();
+          });
+        });
+        document.addEventListener("click", closeDropdown, { once: true });
+      });
+    }
+
     toolbarMeta.createSpan({
       cls: "claude-chat-toolbar-status",
       text: this.getModeSummary(),
