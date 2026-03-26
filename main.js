@@ -370,6 +370,9 @@ class ClaudeChatView extends obsidian.ItemView {
       text: activeModel ? activeModel.label : "No model",
       cls: "claude-chat-model-btn",
     });
+    if (models.length <= 1) {
+      this.modelBtn.disabled = true;
+    }
 
     if (models.length > 1) {
       let dropdown = null;
@@ -390,9 +393,7 @@ class ClaudeChatView extends obsidian.ItemView {
           const item = dropdown.createDiv({
             cls: "claude-chat-model-dropdown-item",
           });
-          const isActive =
-            m.label === this.plugin.settings.activeModelLabel ||
-            (!this.plugin.settings.activeModelLabel && m === models[0]);
+          const isActive = m.label === this.plugin.getCurrentModel()?.label;
           if (isActive) item.addClass("is-active");
           item.createSpan({ text: isActive ? "✓ " + m.label : m.label });
           item.addEventListener("click", async (e) => {
