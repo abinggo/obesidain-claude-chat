@@ -503,10 +503,10 @@ class ClaudeChatView extends obsidian.ItemView {
     const attachments = this.pendingImages.map((item) => ({ ...item }));
     if ((!text && !attachments.length) || this.isRunning) return;
 
-    if (!this.plugin.settings.apiKey) {
+    if (!this.plugin.getCurrentModel()) {
       this.appendMessageEl(
         "error",
-        "API key is missing. Open plugin settings and add your key first."
+        "No model configured. Add models to claude-chat.config.json first."
       );
       return;
     }
@@ -654,13 +654,13 @@ class ClaudeChatView extends obsidian.ItemView {
   updateActionButtons(mode = "idle") {
     if (!this.summarizeBtn) return;
 
-    const missingApiKey = !this.plugin.settings.apiKey;
-    const disabled = this.isRunning || missingApiKey || !this.canSummarizeConversation();
+    const missingModel = !this.plugin.getCurrentModel();
+    const disabled = this.isRunning || missingModel || !this.canSummarizeConversation();
     this.summarizeBtn.disabled = disabled;
     this.summarizeBtn.textContent =
       this.isRunning && mode === "note" ? "整理中" : "整理成笔记";
-    this.summarizeBtn.title = missingApiKey
-      ? "Add your API key in plugin settings first."
+    this.summarizeBtn.title = missingModel
+      ? "No model configured. Add models to claude-chat.config.json first."
       : "";
   }
 
@@ -672,10 +672,10 @@ class ClaudeChatView extends obsidian.ItemView {
   async summarizeConversationToNote() {
     if (this.isRunning || !this.canSummarizeConversation()) return;
 
-    if (!this.plugin.settings.apiKey) {
+    if (!this.plugin.getCurrentModel()) {
       this.appendMessageEl(
         "error",
-        "API key is missing. Open plugin settings and add your key first."
+        "No model configured. Add models to claude-chat.config.json first."
       );
       return;
     }
@@ -1331,6 +1331,20 @@ class ClaudeChatPlugin extends obsidian.Plugin {
     }
 
     workspace.revealLeaf(leaf);
+  }
+
+  getCurrentModel() {
+    const models = this.settings.models || [];
+    return (
+      models.find((m) => m.label === this.settings.activeModelLabel) ||
+      models[0] ||
+      null
+    );
+  }
+
+  async setActiveModel(label) {
+    this.settings.activeModelLabel = label;
+    await this.saveData(omitKeys(this.settings, EXTERNAL_SETTING_KEYS));
   }
 
   async loadSettings() {
