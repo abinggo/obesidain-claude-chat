@@ -18,17 +18,14 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const EXTERNAL_CONFIG_FILENAME = "claude-chat.config.json";
 const EXTERNAL_CONFIG_EXAMPLE_FILENAME = "claude-chat.config.example.json";
 const EXTERNAL_SETTING_KEYS = [
-  "apiKey",
-  "baseUrl",
-  "model",
+  "models",
   "maxTokens",
   "gitRemote",
 ];
 
 const DEFAULT_SETTINGS = {
-  apiKey: "",
-  baseUrl: "https://td.geeknow.top",
-  model: "claude-opus-4-6-thinking",
+  models: [],
+  activeModelLabel: "",
   maxTokens: 16384,
   enableTools: true,
   enableWebSearch: true,
@@ -36,6 +33,8 @@ const DEFAULT_SETTINGS = {
   enableImageUpload: true,
   webSearchLimit: 5,
   gitRemote: "origin",
+  noteExportFolder: "Claude Chat Notes",
+  openGeneratedNotesInRightPane: true,
 };
 
 function toText(value) {
@@ -188,6 +187,31 @@ function parentFolderOfPath(filePath) {
   const segments = filePath.split("/");
   segments.pop();
   return segments.join("/");
+}
+
+function sanitizeFileName(value) {
+  return cleanText(value)
+    .replace(/[\\/:*?"<>|#[\]^]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
+}
+
+function stripMarkdownCodeFence(text) {
+  const value = toText(text).trim();
+  const match = value.match(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n```$/i);
+  return match ? match[1].trim() : value;
+}
+
+function extractTitleFromMarkdown(markdown) {
+  const lines = toText(markdown).split("\n");
+  for (const line of lines) {
+    const match = line.match(/^#\s+(.+?)\s*$/);
+    if (match?.[1]) {
+      return cleanText(match[1]);
+    }
+  }
+  return "";
 }
 
 function isHttpUrl(url) {
@@ -345,8 +369,19 @@ class ClaudeChatView extends obsidian.ItemView {
       text: this.getModeSummary(),
     });
 
-    const newChatBtn = toolbar.createEl("button", { text: "New Chat" });
-    newChatBtn.addEventListener("click", () => this.resetConversation());
+    const toolbarActions = toolbar.createDiv({
+      cls: "claude-chat-toolbar-actions",
+    });
+    this.summarizeBtn = toolbarActions.createEl("button", {
+      text: "整理成笔记",
+      cls: "claude-chat-toolbar-primary",
+    });
+    this.summarizeBtn.addEventListener("click", () =>
+      this.summarizeConversationToNote()
+    );
+
+    this.newChatBtn = toolbarActions.createEl("button", { text: "New Chat" });
+    this.newChatBtn.addEventListener("click", () => this.resetConversation());
 
     this.messagesEl = container.createDiv({ cls: "claude-chat-messages" });
     this.emptyStateEl = this.messagesEl.createDiv({ cls: "claude-chat-empty" });
@@ -436,6 +471,7 @@ class ClaudeChatView extends obsidian.ItemView {
     this.sendBtn.addEventListener("click", () => this.sendMessage());
     this.renderPendingImages();
     this.updateEmptyState();
+    this.updateActionButtons();
   }
 
   getModeSummary() {
@@ -459,6 +495,7 @@ class ClaudeChatView extends obsidian.ItemView {
     this.inputEl.value = "";
     this.inputEl.style.height = "auto";
     this.inputEl.focus();
+    this.updateActionButtons();
   }
 
   async sendMessage() {
@@ -507,10 +544,7 @@ class ClaudeChatView extends obsidian.ItemView {
     this.inputEl.style.height = "auto";
     this.pendingImages = [];
     this.renderPendingImages();
-    this.isRunning = true;
-    this.sendBtn.disabled = true;
-    this.sendBtn.textContent = "Working";
-    if (this.imageBtn) this.imageBtn.disabled = true;
+    this.setBusyState(true, "chat");
 
     const thinkingMessage = this.appendMessageEl("thinking", "Working...");
     const assistantMessage = this.appendMessageEl("assistant", "");
@@ -579,15 +613,111 @@ class ClaudeChatView extends obsidian.ItemView {
         this.appendMessageEl("error", error.message || String(error));
       }
     } finally {
-      this.isRunning = false;
       this.abortController = null;
-      this.sendBtn.disabled = false;
-      this.sendBtn.textContent = "Send";
-      if (this.imageBtn) this.imageBtn.disabled = false;
+      this.setBusyState(false);
       this.inputEl.focus();
       this.scrollToBottom();
       this.updateEmptyState();
     }
+  }
+
+  canSummarizeConversation() {
+    return this.apiMessages.some((message) => {
+      if (!Array.isArray(message?.content)) return false;
+      return message.content.some((block) => {
+        if (block?.type === "text") return Boolean(cleanText(block.text));
+        if (block?.type === "image") return true;
+        return false;
+      });
+    });
+  }
+
+  setBusyState(isBusy, mode = "chat") {
+    this.isRunning = isBusy;
+
+    if (this.sendBtn) {
+      this.sendBtn.disabled = isBusy;
+      this.sendBtn.textContent = isBusy && mode === "chat" ? "Working" : "Send";
+    }
+
+    if (this.imageBtn) {
+      this.imageBtn.disabled = isBusy;
+    }
+
+    if (this.newChatBtn) {
+      this.newChatBtn.disabled = isBusy;
+    }
+
+    this.updateActionButtons(mode);
+  }
+
+  updateActionButtons(mode = "idle") {
+    if (!this.summarizeBtn) return;
+
+    const missingApiKey = !this.plugin.settings.apiKey;
+    const disabled = this.isRunning || missingApiKey || !this.canSummarizeConversation();
+    this.summarizeBtn.disabled = disabled;
+    this.summarizeBtn.textContent =
+      this.isRunning && mode === "note" ? "整理中" : "整理成笔记";
+    this.summarizeBtn.title = missingApiKey
+      ? "Add your API key in plugin settings first."
+      : "";
+  }
+
+  getConversationSuccessMessage(path) {
+    const noteLink = `[[${path.replace(/\.md$/i, "")}]]`;
+    return `已整理成笔记并保存：${noteLink}`;
+  }
+
+  async summarizeConversationToNote() {
+    if (this.isRunning || !this.canSummarizeConversation()) return;
+
+    if (!this.plugin.settings.apiKey) {
+      this.appendMessageEl(
+        "error",
+        "API key is missing. Open plugin settings and add your key first."
+      );
+      return;
+    }
+
+    new SaveNoteModal(
+      this.plugin.app,
+      this.plugin.settings.noteExportFolder,
+      async ({ title, folder }) => {
+        this.abortController = new AbortController();
+        this.setBusyState(true, "note");
+        const thinkingMessage = this.appendMessageEl(
+          "thinking",
+          "正在把这段多轮对话整理成一份结构化笔记..."
+        );
+
+        try {
+          const note = await this.plugin.generateConversationNote(
+            this.apiMessages,
+            this.abortController.signal,
+            { sourceLeaf: this.leaf, customTitle: title, customFolder: folder }
+          );
+
+          if (thinkingMessage.container.isConnected) {
+            thinkingMessage.container.remove();
+          }
+
+          this.appendMessageEl("tool", this.getConversationSuccessMessage(note.path));
+          new obsidian.Notice(`已生成笔记：${note.path}`);
+        } catch (error) {
+          if (thinkingMessage.container.isConnected) {
+            thinkingMessage.container.remove();
+          }
+          if (error.name !== "AbortError") {
+            this.appendMessageEl("error", error.message || String(error));
+          }
+        } finally {
+          this.abortController = null;
+          this.setBusyState(false);
+          this.scrollToBottom();
+        }
+      }
+    ).open();
   }
 
   getMessageLabel(type) {
@@ -800,6 +930,63 @@ class ClaudeChatView extends obsidian.ItemView {
   }
 }
 
+class SaveNoteModal extends obsidian.Modal {
+  constructor(app, defaultFolder, onSubmit) {
+    super(app);
+    this.defaultFolder = defaultFolder || "Claude Chat Notes";
+    this.onSubmit = onSubmit;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.createEl("h2", { text: "整理成笔记" });
+
+    let title = "";
+    let folder = this.defaultFolder;
+
+    new obsidian.Setting(contentEl)
+      .setName("笔记标题")
+      .setDesc("文件名（不含 .md）")
+      .addText((text) => {
+        text.setPlaceholder("我的学习笔记").onChange((v) => {
+          title = v.trim();
+        });
+        setTimeout(() => text.inputEl.focus(), 50);
+      });
+
+    new obsidian.Setting(contentEl)
+      .setName("保存到目录")
+      .setDesc("Vault 内的文件夹路径，不存在时自动创建")
+      .addText((text) =>
+        text.setValue(folder).onChange((v) => {
+          folder = v.trim() || this.defaultFolder;
+        })
+      );
+
+    new obsidian.Setting(contentEl)
+      .addButton((btn) =>
+        btn
+          .setButtonText("开始整理")
+          .setCta()
+          .onClick(() => {
+            if (!title) {
+              new obsidian.Notice("请输入笔记标题。");
+              return;
+            }
+            this.close();
+            this.onSubmit({ title, folder });
+          })
+      )
+      .addButton((btn) =>
+        btn.setButtonText("取消").onClick(() => this.close())
+      );
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
+
 class ClaudeChatSettingTab extends obsidian.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
@@ -950,6 +1137,34 @@ class ClaudeChatSettingTab extends obsidian.PluginSettingTab {
             await this.plugin.saveSettings();
           })
       );
+
+    new obsidian.Setting(containerEl)
+      .setName("Generated Notes Folder")
+      .setDesc("Folder used by the 整理成笔记 action")
+      .addText((text) =>
+        text
+          .setPlaceholder("Claude Chat Notes")
+          .setValue(this.plugin.settings.noteExportFolder)
+          .onChange(async (value) => {
+            this.plugin.settings.noteExportFolder =
+              normalizeVaultPath(value || DEFAULT_SETTINGS.noteExportFolder, {
+                allowEmpty: true,
+              }) || DEFAULT_SETTINGS.noteExportFolder;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new obsidian.Setting(containerEl)
+      .setName("Open generated note in right pane")
+      .setDesc("After整理成笔记, open the new note on the right side")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.openGeneratedNotesInRightPane)
+          .onChange(async (value) => {
+            this.plugin.settings.openGeneratedNotesInRightPane = value !== false;
+            await this.plugin.saveSettings();
+          })
+      );
   }
 }
 
@@ -1025,6 +1240,13 @@ class ClaudeChatPlugin extends obsidian.Plugin {
         DEFAULT_SETTINGS.webSearchLimit
       ),
       gitRemote: cleanText(settings.gitRemote) || DEFAULT_SETTINGS.gitRemote,
+      noteExportFolder:
+        normalizeVaultPath(
+          settings.noteExportFolder || DEFAULT_SETTINGS.noteExportFolder,
+          { allowEmpty: true }
+        ) || DEFAULT_SETTINGS.noteExportFolder,
+      openGeneratedNotesInRightPane:
+        settings.openGeneratedNotesInRightPane !== false,
     };
   }
 
@@ -1461,20 +1683,27 @@ class ClaudeChatPlugin extends obsidian.Plugin {
     return tools;
   }
 
-  async createMessage(messages, signal) {
+  async createMessage(messages, signal, options = {}) {
     const baseUrl = normalizeBaseUrl(this.settings.baseUrl);
     if (!baseUrl) {
       throw new Error("Base URL is not configured.");
     }
 
     const body = {
-      model: this.settings.model,
-      max_tokens: this.settings.maxTokens,
-      system: this.buildSystemPrompt(),
+      model: options.model || this.settings.model,
+      max_tokens: clampInteger(
+        options.maxTokens,
+        256,
+        32768,
+        this.settings.maxTokens
+      ),
+      system: options.systemPrompt || this.buildSystemPrompt(),
       messages,
     };
 
-    const tools = this.getToolDefinitions();
+    const tools = Array.isArray(options.tools)
+      ? options.tools
+      : this.getToolDefinitions();
     if (tools.length) {
       body.tools = tools;
     }
@@ -1501,6 +1730,185 @@ class ClaudeChatPlugin extends obsidian.Plugin {
     }
 
     return data;
+  }
+
+  buildConversationTranscript(messages) {
+    const transcript = [];
+
+    messages.forEach((message) => {
+      if (!Array.isArray(message?.content)) return;
+
+      if (message.role === "user") {
+        const blocks = [];
+        message.content.forEach((block) => {
+          if (block?.type === "text" && cleanText(block.text)) {
+            blocks.push(cleanText(block.text));
+          } else if (block?.type === "image") {
+            blocks.push("[User attached an image]");
+          }
+        });
+
+        if (blocks.length) {
+          transcript.push(`User:\n${blocks.join("\n")}`);
+        }
+      }
+
+      if (message.role === "assistant") {
+        const blocks = message.content
+          .filter((block) => block?.type === "text" && cleanText(block.text))
+          .map((block) => cleanText(block.text));
+
+        if (blocks.length) {
+          transcript.push(`Assistant:\n${blocks.join("\n\n")}`);
+        }
+      }
+    });
+
+    return transcript.join("\n\n---\n\n").trim();
+  }
+
+  buildConversationNotePrompt(transcript) {
+    const activeFile = this.app.workspace.getActiveFile();
+    const activeHint = activeFile
+      ? `Current Obsidian context note: ${activeFile.path}`
+      : "There is no active note.";
+
+    return [
+      "Please turn the following completed learning conversation into a polished Obsidian note.",
+      activeHint,
+      "",
+      "Requirements:",
+      "- Output Markdown only. Do not wrap the answer in code fences.",
+      "- Start with exactly one H1 title.",
+      "- Write in the main language used in the conversation.",
+      "- Organize the note so it is easy to review later in Obsidian.",
+      "- Include: concise summary, structured key points, explanations, and examples when useful.",
+      "- Use bullets, tables, callouts, and short sections when they improve readability.",
+      "- If the topic contains a process, workflow, comparison, hierarchy, or decision path, include a Mermaid diagram using valid Obsidian Mermaid syntax.",
+      "- Do not mention that this note was generated from a chat.",
+      "",
+      "Conversation transcript:",
+      transcript,
+    ].join("\n");
+  }
+
+  buildConversationNoteSystemPrompt() {
+    return [
+      "You are an expert Obsidian note editor.",
+      "Your job is to transform finished multi-turn conversations into polished, well-structured study notes.",
+      "Prefer clean headings, crisp phrasing, and information density without being messy.",
+      "When a diagram would genuinely help, emit a valid mermaid code block that Obsidian can render.",
+      "Return Markdown only.",
+    ].join(" ");
+  }
+
+  getAvailableNotePath(folder, baseName) {
+    const normalizedFolder = normalizeVaultPath(folder || "", { allowEmpty: true });
+    const safeBase = sanitizeFileName(baseName) || "Claude Chat Note";
+    let candidate = normalizedFolder
+      ? `${normalizedFolder}/${safeBase}.md`
+      : `${safeBase}.md`;
+    let index = 2;
+
+    while (this.app.vault.getAbstractFileByPath(candidate)) {
+      candidate = normalizedFolder
+        ? `${normalizedFolder}/${safeBase} ${index}.md`
+        : `${safeBase} ${index}.md`;
+      index += 1;
+    }
+
+    return candidate;
+  }
+
+  async openGeneratedNote(path, sourceLeaf) {
+    const file = this.getMarkdownFile(path);
+    let leaf = null;
+
+    if (this.settings.openGeneratedNotesInRightPane) {
+      try {
+        if (
+          sourceLeaf &&
+          typeof this.app.workspace.createLeafBySplit === "function"
+        ) {
+          leaf = this.app.workspace.createLeafBySplit(
+            sourceLeaf,
+            "vertical",
+            false
+          );
+        }
+      } catch {
+        leaf = null;
+      }
+    }
+
+    if (!leaf) {
+      leaf = this.app.workspace.getLeaf(true);
+    }
+
+    await leaf.openFile(file);
+  }
+
+  async generateConversationNote(messages, signal, options = {}) {
+    const transcript = this.buildConversationTranscript(messages);
+    if (!transcript) {
+      throw new Error("There is no conversation content to organize yet.");
+    }
+
+    const response = await this.createMessage(
+      [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: this.buildConversationNotePrompt(transcript),
+            },
+          ],
+        },
+      ],
+      signal,
+      {
+        systemPrompt: this.buildConversationNoteSystemPrompt(),
+        tools: [],
+        maxTokens: Math.min(24000, this.settings.maxTokens),
+      }
+    );
+
+    const markdown = stripMarkdownCodeFence(
+      response.content
+        .filter((block) => block.type === "text" && cleanText(block.text))
+        .map((block) => block.text)
+        .join("\n\n")
+    );
+
+    if (!markdown) {
+      throw new Error("The model did not return note content.");
+    }
+
+    const title =
+      options.customTitle ||
+      extractTitleFromMarkdown(markdown) ||
+      `Claude Chat Note ${new Date().toISOString().slice(0, 10)}`;
+    const folder =
+      options.customFolder != null
+        ? options.customFolder
+        : this.settings.noteExportFolder;
+    const datedBaseName = options.customTitle
+      ? sanitizeFileName(options.customTitle)
+      : `${new Date().toISOString().slice(0, 10)} ${title}`;
+    const notePath = this.getAvailableNotePath(folder, datedBaseName);
+
+    await this.ensureFolderForFile(notePath);
+    await this.app.vault.create(notePath, `${markdown.trim()}\n`);
+    await this.openGeneratedNote(notePath, options.sourceLeaf);
+
+    return {
+      ok: true,
+      path: notePath,
+      title,
+      markdown,
+      summary: `Generated note ${notePath}.`,
+    };
   }
 
   async runAgentConversation(messages, handlers = {}, signal) {
