@@ -940,6 +940,7 @@ class ClaudeChatView extends obsidian.ItemView {
     });
 
     return {
+      type: "image",
       name: file.name || "image",
       size: file.size || 0,
       mediaType,
@@ -982,7 +983,7 @@ class ClaudeChatView extends obsidian.ItemView {
     for (const file of files) {
       if (this.pendingImages.length >= MAX_IMAGE_ATTACHMENTS) {
         new obsidian.Notice(
-          `You can attach up to ${MAX_IMAGE_ATTACHMENTS} images at a time.`
+          `You can attach up to ${MAX_IMAGE_ATTACHMENTS} files at a time.`
         );
         break;
       }
