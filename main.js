@@ -769,7 +769,6 @@ class ClaudeChatView extends obsidian.ItemView {
 
   getMessageLabel(type) {
     const labels = {
-      assistant: "Claude",
       thinking: "Planning",
       tool: "Tools",
       error: "Error",
