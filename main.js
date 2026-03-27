@@ -972,7 +972,12 @@ class ClaudeChatView extends obsidian.ItemView {
       }
 
       try {
-        const attachment = await this.fileToImageAttachment(file);
+        const isPdf =
+          file.type === "application/pdf" ||
+          (file.name || "").toLowerCase().endsWith(".pdf");
+        const attachment = isPdf
+          ? await this.fileToPdfAttachment(file)
+          : await this.fileToImageAttachment(file);
         this.pendingImages.push(attachment);
       } catch (error) {
         new obsidian.Notice(error.message || String(error));
