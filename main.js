@@ -15,6 +15,7 @@ const DEFAULT_NOTE_CHARS = 12000;
 const DEFAULT_WEB_CHARS = 10000;
 const MAX_IMAGE_ATTACHMENTS = 4;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_PDF_BYTES = 20 * 1024 * 1024;
 const EXTERNAL_CONFIG_FILENAME = "claude-chat.config.json";
 const EXTERNAL_CONFIG_EXAMPLE_FILENAME = "claude-chat.config.example.json";
 const EXTERNAL_SETTING_KEYS = [
@@ -388,7 +389,10 @@ class ClaudeChatView extends obsidian.ItemView {
           closeDropdown();
           return;
         }
-        dropdown = toolbarMeta.createDiv({ cls: "claude-chat-model-dropdown" });
+        dropdown = document.body.createDiv({ cls: "claude-chat-model-dropdown" });
+        const rect = this.modelBtn.getBoundingClientRect();
+        dropdown.style.top = rect.bottom + 6 + "px";
+        dropdown.style.left = rect.left + "px";
         models.forEach((m) => {
           const item = dropdown.createDiv({
             cls: "claude-chat-model-dropdown-item",
@@ -765,23 +769,22 @@ class ClaudeChatView extends obsidian.ItemView {
 
   getMessageLabel(type) {
     const labels = {
-      user: "You",
       assistant: "Claude",
       thinking: "Planning",
       tool: "Tools",
       error: "Error",
     };
-    return labels[type] || "Message";
+    return labels[type] || null;
   }
 
   createMessageEl(type) {
     const container = this.messagesEl.createDiv({
       cls: `claude-chat-msg claude-chat-msg-${type}`,
     });
-    container.createDiv({
-      cls: "claude-chat-msg-meta",
-      text: this.getMessageLabel(type),
-    });
+    const label = this.getMessageLabel(type);
+    if (label) {
+      container.createDiv({ cls: "claude-chat-msg-meta", text: label });
+    }
     const body = container.createDiv({ cls: "claude-chat-msg-body" });
 
     if (type === "thinking") {
@@ -927,6 +930,33 @@ class ClaudeChatView extends obsidian.ItemView {
       mediaType,
       data,
       previewUrl: `data:${mediaType};base64,${data}`,
+    };
+  }
+
+  async fileToPdfAttachment(file) {
+    if (file.size > MAX_PDF_BYTES) {
+      throw new Error(
+        `${file.name} is too large. Keep PDFs under ${formatBytes(MAX_PDF_BYTES)}.`
+      );
+    }
+
+    const data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = toText(reader.result);
+        const base64 = result.includes(",") ? result.split(",").pop() : result;
+        resolve(base64 || "");
+      };
+      reader.onerror = () => reject(new Error(`Failed to read ${file.name}.`));
+      reader.readAsDataURL(file);
+    });
+
+    return {
+      type: "pdf",
+      name: file.name || "document.pdf",
+      size: file.size || 0,
+      mediaType: "application/pdf",
+      data,
     };
   }
 
