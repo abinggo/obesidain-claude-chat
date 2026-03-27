@@ -852,17 +852,22 @@ class ClaudeChatView extends obsidian.ItemView {
 
     attachments.forEach((attachment, index) => {
       const card = gallery.createDiv({ cls: "claude-chat-attachment-card" });
-      const preview = card.createEl("img", {
-        cls: "claude-chat-attachment-thumb",
-        attr: {
-          src: attachment.previewUrl,
-          alt: attachment.name,
-          loading: "lazy",
-        },
-      });
-      preview.addEventListener("error", () => {
-        preview.style.display = "none";
-      });
+      if (attachment.type === "pdf") {
+        const icon = card.createDiv({ cls: "claude-chat-attachment-thumb claude-chat-attachment-pdf-icon" });
+        icon.setText("📄");
+      } else {
+        const preview = card.createEl("img", {
+          cls: "claude-chat-attachment-thumb",
+          attr: {
+            src: attachment.previewUrl,
+            alt: attachment.name,
+            loading: "lazy",
+          },
+        });
+        preview.addEventListener("error", () => {
+          preview.style.display = "none";
+        });
+      }
 
       const info = card.createDiv({ cls: "claude-chat-attachment-info" });
       info.createDiv({
