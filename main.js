@@ -561,15 +561,26 @@ class ClaudeChatView extends obsidian.ItemView {
     const previousLength = this.apiMessages.length;
     const userContent = [];
 
-    attachments.forEach((image) => {
-      userContent.push({
-        type: "image",
-        source: {
-          type: "base64",
-          media_type: image.mediaType,
-          data: image.data,
-        },
-      });
+    attachments.forEach((attachment) => {
+      if (attachment.type === "pdf") {
+        userContent.push({
+          type: "document",
+          source: {
+            type: "base64",
+            media_type: "application/pdf",
+            data: attachment.data,
+          },
+        });
+      } else {
+        userContent.push({
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: attachment.mediaType,
+            data: attachment.data,
+          },
+        });
+      }
     });
 
     if (text) {
@@ -577,7 +588,7 @@ class ClaudeChatView extends obsidian.ItemView {
     } else if (attachments.length) {
       userContent.push({
         type: "text",
-        text: "Please analyze the attached image and answer the user's implied request.",
+        text: "Please analyze the attached file and answer the user's implied request.",
       });
     }
 
