@@ -460,7 +460,7 @@ class ClaudeChatView extends obsidian.ItemView {
     this.fileInputEl = composerRow.createEl("input", {
       attr: {
         type: "file",
-        accept: "image/*",
+        accept: "image/*,.pdf",
         multiple: "multiple",
       },
     });
